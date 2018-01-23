@@ -8,7 +8,7 @@ var _ = require('lodash');
 var log = require('../core/log.js');
 
 var BB = require('./indicators/BB.js');
-var RSI = require('./indicators/RSI.js');
+var rsi = require('./indicators/RSI.js');
 
 // let's create our own method
 var method = {};
@@ -20,48 +20,50 @@ method.init = function () {
   this.trend = {
     zone: 'none',  // none, top, high, low, bottom
     duration: 0,
-    persisted: false,
+    persisted: false
   };
 
   this.requiredHistory = this.tradingAdvisor.historySize;
 
   // define the indicators we need
   this.addIndicator('bb', 'BB', this.settings.bbands);
-  this.addIndicator('rsi', 'RSI', this.settings)
+  this.addIndicator('rsi', 'RSI', this.settings);
 }
 
 
 // for debugging purposes log the last
 // calculated parameters.
 method.log = function (candle) {
-  var digits = 8;
-  var BB = this.indicators.bb;
-  var rsi = this.indicators.rsi;
-  //BB.lower; BB.upper; BB.middle are your line values 
+  // var digits = 8;
+  // var BB = this.indicators.bb;
+  // //BB.lower; BB.upper; BB.middle are your line values 
 
-  console.log('______________________________________');
-  console.log('calculated BB properties for candle ', this.nsamples);
+  // log.debug('______________________________________');
+  // log.debug('calculated BB properties for candle ', this.nsamples);
 
-  if (BB.upper > candle.close) console.log('\t', 'Upper BB:', BB.upper.toFixed(digits));
-  if (BB.middle > candle.close) console.log('\t', 'Mid   BB:', BB.middle.toFixed(digits));
-  if (BB.lower >= candle.close) console.log('\t', 'Lower BB:', BB.lower.toFixed(digits));
-  console.log('\t', 'price:', candle.close.toFixed(digits));
-  if (BB.upper <= candle.close) console.log('\t', 'Upper BB:', BB.upper.toFixed(digits));
-  if (BB.middle <= candle.close) console.log('\t', 'Mid   BB:', BB.middle.toFixed(digits));
-  if (BB.lower < candle.close) console.log('\t', 'Lower BB:', BB.lower.toFixed(digits));
-  console.log('\t', 'Band gap: ', BB.upper.toFixed(digits) - BB.lower.toFixed(digits));
+  // if (BB.upper > candle.close) log.debug('\t', 'Upper BB:', BB.upper.toFixed(digits));
+  // if (BB.middle > candle.close) log.debug('\t', 'Mid   BB:', BB.middle.toFixed(digits));
+  // if (BB.lower >= candle.close) log.debug('\t', 'Lower BB:', BB.lower.toFixed(digits));
+  // log.debug('\t', 'price:', candle.close.toFixed(digits));
+  // if (BB.upper <= candle.close) log.debug('\t', 'Upper BB:', BB.upper.toFixed(digits));
+  // if (BB.middle <= candle.close) log.debug('\t', 'Mid   BB:', BB.middle.toFixed(digits));
+  // if (BB.lower < candle.close) log.debug('\t', 'Lower BB:', BB.lower.toFixed(digits));
+  // log.debug('\t', 'Band gap: ', BB.upper.toFixed(digits) - BB.lower.toFixed(digits));
 
-  console.log('calculated RSI properties for candle:');
-  console.log('\t', 'rsi:', rsi.result.toFixed(digits));
-  console.log('\t', 'price:', candle.close.toFixed(digits));
+  // var rsi = this.indicators.rsi;
+
+  // log.debug('calculated RSI properties for candle:');
+  // log.debug('\t', 'rsi:', rsi.result.toFixed(digits));
+  // log.debug('\t', 'price:', candle.close.toFixed(digits));
 }
 
 method.check = function (candle) {
   var BB = this.indicators.bb;
   var price = candle.close;
-  var rsi = this.indicators.rsi;
-
   this.nsamples++;
+
+  var rsi = this.indicators.rsi;
+  var rsiVal = rsi.result;
 
   // price Zone detection
   var zone = 'none';
@@ -69,33 +71,37 @@ method.check = function (candle) {
   if ((price < BB.upper) && (price >= BB.middle)) zone = 'high';
   if ((price > BB.lower) && (price < BB.middle)) zone = 'low';
   if (price <= BB.lower) zone = 'bottom';
+  log.debug('current zone:  ', zone);
+  log.debug('current trend duration:  ', this.trend.duration);
 
-  this.trend.duration++;
-
-  console.log('current zone:  ', zone, ' for ', this.trend.duration, ' candle(s)');
-
-  //try to buy under the lower bollinger band, then sell if rsi changes direction
-  if (this.trend.zone == 'bottom' && rsi.result <= this.settings.thresholds.low) {
-    console.log("advising long on rsi", rsi.result)
-    this.advice('long')
+  if (this.trend.zone == zone) {
     this.trend = {
       zone: zone,  // none, top, high, low, bottom
-      duration: 0,
-      persisted: false,
-      adviced: true
+      duration: this.trend.duration+1,
+      persisted: true
     }
   }
-  else if (this.trend.adviced && this.trend.zone != 'bottom' && rsi.result >= this.settings.thresholds.high) {
-    console.log("advising short on rsi", rsi.result)
-    this.advice('short')
+  else {
     this.trend = {
       zone: zone,  // none, top, high, low, bottom
       duration: 0,
-      persisted: false,      
+      persisted: false
     }
-  }  
+  }
 
-  this.advice();
+  if (price <= BB.lower && rsiVal <= this.settings.thresholds.low && this.trend.duration >= this.settings.thresholds.persistence) {
+    this.advice('long')
+  }
+  if (price >= BB.upper && rsiVal >= this.settings.thresholds.high) {
+    this.advice('short')
+  }
+
+  // this.trend = {
+  //   zone: zone,  // none, top, high, low, bottom
+  //   duration: 0,
+  //   persisted: false
+
+
 }
 
 module.exports = method;

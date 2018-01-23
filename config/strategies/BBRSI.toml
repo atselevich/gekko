@@ -1,11 +1,11 @@
 interval = 14
 
 [thresholds]
-low = 30
-high = 70
-persistence = 1
+low = 26
+high = 38
+persistence = 4
 
 [bbands]
 TimePeriod = 20
-NbDevUp = 2.25
+NbDevUp = 2
 NbDevDn = 2
