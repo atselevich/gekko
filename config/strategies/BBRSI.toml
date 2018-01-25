@@ -1,9 +1,9 @@
 interval = 14
 
 [thresholds]
-low = 26
-high = 38
-persistence = 4
+low = 40
+high = 40
+persistence = 9
 
 [bbands]
 TimePeriod = 20

@@ -92,7 +92,7 @@ method.check = function (candle) {
   if (price <= BB.lower && rsiVal <= this.settings.thresholds.low && this.trend.duration >= this.settings.thresholds.persistence) {
     this.advice('long')
   }
-  if (price >= BB.upper && rsiVal >= this.settings.thresholds.high) {
+  if (price >= BB.middle && rsiVal >= this.settings.thresholds.high) {
     this.advice('short')
   }
 
