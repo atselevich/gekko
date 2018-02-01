@@ -89,10 +89,44 @@ method.check = function (candle) {
     }
   }
 
-  if (price <= BB.lower && rsiVal <= this.settings.thresholds.low && this.trend.duration >= this.settings.thresholds.persistence) {
+  var percentOfPrice = ((BB.middle - BB.lower) / price);
+  var lowModifier = percentOfPrice * this.settings.custom.LowMod;
+  var highModifier = percentOfPrice * this.settings.custom.HighMod;
+  
+  log.debug('low modifier: ', lowModifier)
+  log.debug('high modifier: ', highModifier)
+
+  var rsiLowThresh = this.settings.thresholds.low - (this.settings.thresholds.low * lowModifier)
+  log.debug('RSI low: ', this.settings.thresholds.low, 'modified: ', rsiLowThresh)
+
+  var rsiHighThresh = this.settings.thresholds.high - (this.settings.thresholds.high * highModifier)
+  log.debug('RSI high: ', this.settings.thresholds.high, 'modified: ', rsiHighThresh)
+
+  var scaledPercent = percentOfPrice * 1000;
+  log.debug('Scaled Percent', scaledPercent);
+  
+  var persistence = this.settings.thresholds.persistence;
+  if(scaledPercent > 4 && scaledPercent < 10)
+  {
+     persistence = persistence - 1
+  }
+
+  if(scaledPercent >= 10 && scaledPercent < 20)
+  {
+     persistence = persistence - 2
+  }
+
+  if(scaledPercent >= 20)
+  {
+     persistence = persistence - 3
+  }
+
+  if (price <= BB.lower && rsiVal <= rsiLowThresh && this.trend.duration >= persistence) {
+    log.debug('ADVISING LONG')
     this.advice('long')
   }
-  if (price >= BB.middle && rsiVal >= this.settings.thresholds.high) {
+  if (price >= BB.middle && rsiVal >= rsiHighThresh) {
+    log.debug('ADVISING SHORT')
     this.advice('short')
   }
 
