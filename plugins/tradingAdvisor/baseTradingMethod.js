@@ -303,8 +303,8 @@ Base.prototype.advice = function(newPosition, _candle) {
     return;
 
   // ignore if advice equals previous advice
-  if(newPosition === this._prevAdvice)
-    return;
+  //if(newPosition === this._prevAdvice)
+    //return;
 
   // cache the candle this advice is based on
   if(_candle)

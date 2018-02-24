@@ -10,8 +10,13 @@ const watchConfig = config.watch;
 const PaperTrader = function() {
   _.bindAll(this);
 
-  this.fee = 1 - (calcConfig['fee' + calcConfig.feeUsing.charAt(0).toUpperCase() + calcConfig.feeUsing.slice(1)] + calcConfig.slippage) / 100;
+  this.fee = 1 - (calcConfig['fee' + calcConfig.feeUsing.charAt(0).toUpperCase() + calcConfig.feeUsing.slice(1)] + calcConfig.slippage) / 100;  
+  this.keepCurrency = 0;
 
+  if(_.isNumber(calcConfig.keepCurrency)) {    
+    this.keepCurrency = calcConfig.keepCurrency;
+ }
+  
   this.currency = watchConfig.currency;
   this.asset = watchConfig.asset;
 
@@ -71,11 +76,13 @@ PaperTrader.prototype.updatePosition = function(advice) {
   let what = advice.recommendation;
   let price = advice.candle.close;
 
+  var amount = this.portfolio.currency * (1 - this.keepCurrency) / price;
+  
   // virtually trade all {currency} to {asset}
   // at the current price (minus fees)
   if(what === 'long') {
-    this.portfolio.asset += this.extractFee(this.portfolio.currency / price);
-    this.portfolio.currency = 0;
+    this.portfolio.asset += this.extractFee(amount);
+    this.portfolio.currency = this.portfolio.currency - (amount * price);
     this.trades++;
   }
 
