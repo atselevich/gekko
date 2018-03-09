@@ -16,6 +16,7 @@ method.init = function () {
   this.nsamples = 0;
   this.longprice = 0;
   this.longtrades = 0;
+  this.uoMod = 0;
 
   this.trend = {
     zone: "none",  // none, top, high, low, bottom
@@ -29,6 +30,7 @@ method.init = function () {
   // define the indicators we need
   this.addTalibIndicator("bb", "bbands", this.settings.bbands);
   this.addTalibIndicator("uo", "ultosc", this.settings.ultosc);
+  this.addTalibIndicator("uo2", "ultosc", this.settings.ultosc2);
   this.addTalibIndicator("macd", "macd", this.settings.macd);
 };
 
@@ -52,9 +54,12 @@ method.check = function (candle) {
   var uo = this.talibIndicators.uo;
   var uoVal = uo.result["outReal"];
 
+  var uo2 = this.talibIndicators.uo2;
+  var uoVal2 = uo.result["outReal"];
+
   var macd = this.talibIndicators.macd;
   var diff = macd.result['outMACD'] - macd.result['outMACDSignal'];
-  
+
   // price Zone detection
   var zone = "none";
   if (price >= bbupper) zone = "top";
@@ -73,20 +78,49 @@ method.check = function (candle) {
     this.trend.duration = 0;
     this.trend.persisted = false;
   }
-  
-  log.debug("LONGPRICE: ", this.longprice);  
 
-  if (zone === "bottom" && uoVal <= this.settings.thresholds.low && diff < 0 && this.trend.duration >= this.settings.thresholds.persistence) {
-    log.debug("ADVISING LONG");    
+  var isLow = uoVal2 < this.settings.thresholdsSecondary;
+  var thresholds = null;
+
+  if (!isLow) {
+    thresholds = this.settings.thresholdsHigh;
+  }
+  else {
+    thresholds = this.settings.thresholdsLow;
+  }
+
+  var persistence = (this.trend.position === "long" ? thresholds.persistence * this.settings.custom.persistenceMod: thresholds.persistence);
+  
+  if ((zone === "bottom" && uoVal <= (thresholds.low + this.uoMod)) && this.trend.duration >= persistence) {
     this.advice("long");
     this.trend.position = "long";
     this.longprice += price;
-    this.longtrades++;    
+    this.uoMod += this.settings.custom.uoMod;
+    this.longtrades++;
+    this.trend.duration = 0;
+    this.trend.persisted = false;
   }
-  if ((price > (this.longprice / this.longtrades) && uoVal >= this.settings.thresholds.high && this.trend.position === "long")) {       
+
+  var canShort = false;
+  var avePrice = this.longprice / this.longtrades;
+
+  if (this.longtrades > this.settings.custom.maxLongs) {
+    if (this.longtrades > this.settings.custom.maxLongs * this.settings.custom.maxLongsMod) {
+      canShort = uoVal >= thresholds.high && this.trend.position === "long";
+    }
+    else {
+      canShort = price > avePrice && uoVal >= thresholds.high && this.trend.position === "long";
+    }
+  }
+  else {
+    canShort = price > bblower && price > avePrice * (1 + this.settings.custom.priceMod) && uoVal >= thresholds.high && this.trend.position === "long";
+  }
+
+  if (canShort) {
     this.longtrades = 0;
     this.longprice = 0;
-    log.debug("ADVISING SHORT");
+    this.uoMod = 0;
+    //log.debug("ADVISING SHORT");
     this.advice("short");
     this.trend.position = "none";
   }

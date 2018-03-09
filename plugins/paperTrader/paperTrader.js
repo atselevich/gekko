@@ -76,8 +76,8 @@ PaperTrader.prototype.updatePosition = function(advice) {
   let what = advice.recommendation;
   let price = advice.candle.close;
 
-  var amount = this.portfolio.currency * (1 - this.keepCurrency) / price;
-  
+  var amount = (this.portfolio.currency * (1 - this.keepCurrency)) / price;
+    
   // virtually trade all {currency} to {asset}
   // at the current price (minus fees)
   if(what === 'long') {

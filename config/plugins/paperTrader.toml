@@ -7,4 +7,4 @@ slippage = 0.05
 asset = 0
 currency = 10000
 
-keepCurrency = 0.90
+keepCurrency = 0.80

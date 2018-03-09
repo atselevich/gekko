@@ -1,7 +1,15 @@
-[thresholds]
-low = 35
-high = 65
+[thresholdsHigh]
+low = 45
+high = 55
 persistence = 2
+
+[thresholdsLow]
+low = 35
+high = 45
+persistence = 2
+
+[thresholdsSecondary]
+low = 50
 
 [bbands]
 optInTimePeriod = 20
@@ -19,5 +27,14 @@ optInTimePeriod1 = 7
 optInTimePeriod2 = 14
 optInTimePeriod3 = 28
 
+[ultosc2]
+optInTimePeriod1 = 28
+optInTimePeriod2 = 56
+optInTimePeriod3 = 112
+
 [custom]
-keepCurrency = 0.90
+priceMod = 0
+uoMod = 0
+maxLongs = 3
+maxLongsMod = 3
+persistenceMod = 3
