@@ -79,19 +79,26 @@ method.check = function (candle) {
     this.trend.persisted = false;
   }
 
-  var isLow = uoVal2 < this.settings.thresholdsSecondary;
-  var thresholds = null;
+  var isLow = uoVal2 < this.settings.thresholdsSecondary.low;
+  var thresholds = { low: 0, high: 0, persistence: 1000 }
 
-  if (!isLow) {
-    thresholds = this.settings.thresholdsHigh;
+    if (isLow) {
+    thresholds.low = this.settings.thresholdsLow.low;
+    thresholds.high = this.settings.thresholdsLow.high;
+    thresholds.persistence = this.settings.thresholdsLow.persistence;
   }
   else {
-    thresholds = this.settings.thresholdsLow;
+    thresholds.low = this.settings.thresholdsHigh.low;
+    thresholds.high = this.settings.thresholdsHigh.high;
+    thresholds.persistence = this.settings.thresholdsHigh.persistence;
   }
 
-  var persistence = (this.trend.position === "long" ? thresholds.persistence * this.settings.custom.persistenceMod: thresholds.persistence);
-  
+  var persistence = (this.trend.position === "long" ? thresholds.persistence * this.settings.custom.persistenceMod : thresholds.persistence);  
+
   if ((zone === "bottom" && uoVal <= (thresholds.low + this.uoMod)) && this.trend.duration >= persistence) {
+
+    log.debug("ADVISING LONG")
+    log.debug(uoVal2)
     this.advice("long");
     this.trend.position = "long";
     this.longprice += price;
