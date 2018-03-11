@@ -11,7 +11,7 @@ const PaperTrader = function() {
   _.bindAll(this);
 
   this.fee = 1 - (calcConfig['fee' + calcConfig.feeUsing.charAt(0).toUpperCase() + calcConfig.feeUsing.slice(1)] + calcConfig.slippage) / 100;  
-  this.keepCurrency = 0;
+  this.keepCurrency = 0.50;
 
   if(_.isNumber(calcConfig.keepCurrency)) {    
     this.keepCurrency = calcConfig.keepCurrency;

@@ -95,7 +95,9 @@ method.check = function (candle) {
 
   var persistence = (this.trend.position === "long" ? thresholds.persistence * this.settings.custom.persistenceMod : thresholds.persistence);  
 
-  if ((zone === "bottom" && uoVal <= (thresholds.low + this.uoMod)) && this.trend.duration >= persistence) {
+  var canLong = ((zone === "bottom" && uoVal <= (thresholds.low + this.uoMod)) && this.trend.duration >= persistence) || (uoVal <= this.settings.thresholdsSecondary.absoluteLow)
+
+  if (canLong) {
 
     log.debug("ADVISING LONG")
     log.debug(uoVal2)
