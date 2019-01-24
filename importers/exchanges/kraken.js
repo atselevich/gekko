@@ -1,10 +1,8 @@
-var KrakenClient = require('kraken-api-es5')
 var _ = require('lodash');
 var moment = require('moment');
 
 var util = require('../../core/util.js');
 var log = require('../../core/log');
-var Errors = require('../../core/error.js')
 
 var config = util.getConfig();
 
@@ -37,15 +35,19 @@ var fetch = () => {
 }
 
 var handleFetch = (err, trades) => {
+    if(!err && !trades.length) {
+        console.log('no trades');
+        err = 'No trades';
+    }
+
     if (err) {
         log.error(`There was an error importing from Kraken ${err}`);
         fetcher.emit('done');
         return fetcher.emit('trades', []);
     }
 
-    var last = moment.unix(_.last(trades).date);
+    var last = moment.unix(_.last(trades).date).utc();
     lastId = _.last(trades).tid
-
     if(last < from) {
         log.debug('Skipping data, they are before from date', last.format());
         return fetch();

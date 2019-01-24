@@ -4,7 +4,7 @@ var config = util.getConfig();
 var dirs = util.dirs();
 var log = require(dirs.core + 'log');
 var moment = require('moment');
-var cp = require(dirs.core + 'cp');
+var gekkoEnv = util.gekkoEnv();
 
 var adapter = config[config.adapter];
 var daterange = config.importer.daterange;
@@ -17,9 +17,10 @@ if(daterange.to) {
   var to = moment().utc();
   log.debug(
     'No end date specified for importing, setting to',
-    to.format('YYYY-MM-DD HH:mm:ss')
+    to.format()
   );
 }
+log.debug(to.format());
 
 if(!from.isValid())
   util.die('invalid `from`');
@@ -29,7 +30,7 @@ if(!to.isValid())
 
 var TradeBatcher = require(dirs.budfox + 'tradeBatcher');
 var CandleManager = require(dirs.budfox + 'candleManager');
-var exchangeChecker = require(dirs.core + 'exchangeChecker');
+var exchangeChecker = require(dirs.gekko + 'exchange/exchangeChecker');
 
 var error = exchangeChecker.cantFetchFullHistory(config.watch);
 if(error)
@@ -73,7 +74,7 @@ var Market = function() {
   this.candleManager.on(
     'candles',
     this.pushCandles
-  );  
+  );
 
   Readable.call(this, {objectMode: true});
 
@@ -104,10 +105,10 @@ Market.prototype.processTrades = function(trades) {
     return;
   }
 
-  if(_.size(trades)) {
+  if(_.size(trades) && gekkoEnv === 'child-process') {
     let lastAtTS = _.last(trades).date;
     let lastAt = moment.unix(lastAtTS).utc().format();
-    cp.update(lastAt);
+    process.send({event: 'marketUpdate', payload: lastAt});
   }
 
   setTimeout(this.get, 1000);

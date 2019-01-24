@@ -2,7 +2,7 @@ var _ = require('lodash');
 var fs = require('fs');
 var moment = require('moment');
 
-var util = require('../../core/util');
+var util = require('../util');
 var config = util.getConfig();
 var dirs = util.dirs();
 var log = require(dirs.core + '/log');
@@ -18,9 +18,15 @@ Stitcher.prototype.ago = function(ts) {
 }
 
 Stitcher.prototype.verifyExchange = function() {
-  var exchangeChecker = require(dirs.core + 'exchangeChecker');
-  var slug = config.watch.exchange.toLowerCase();
-  var exchange = exchangeChecker.getExchangeCapabilities(slug);
+  require(dirs.gekko + 'exchange/dependencyCheck');
+  const exchangeChecker = require(dirs.gekko + 'exchange/exchangeChecker');
+  const slug = config.watch.exchange.toLowerCase();
+  let exchange;
+  try {
+    exchange = exchangeChecker.getExchangeCapabilities(slug);
+  } catch(e) {
+    util.die(e.message);
+  }
 
   if(!exchange)
     util.die(`Unsupported exchange: ${slug}`);
@@ -54,10 +60,11 @@ Stitcher.prototype.prepareHistoricalData = function(done) {
 
   var endTime = moment().utc().startOf('minute');
   var idealStartTime = endTime.clone().subtract(requiredHistory, 'm');
-
+  
   this.reader.mostRecentWindow(idealStartTime, endTime, function(localData) {
     // now we know what data is locally available, what
     // data would we need from the exchange?
+    
     if(!localData) {
       log.info('\tNo usable local data available, trying to get as much as possible from the exchange..');
       var idealExchangeStartTime = idealStartTime.clone();
@@ -180,7 +187,7 @@ Stitcher.prototype.prepareHistoricalData = function(done) {
 
 Stitcher.prototype.checkExchangeTrades = function(since, next) {
   var provider = config.watch.exchange.toLowerCase();
-  var DataProvider = require(util.dirs().gekko + 'exchanges/' + provider);
+  var DataProvider = require(util.dirs().gekko + 'exchange/wrappers/' + provider);
 
   var exchangeConfig = config.watch;
 
@@ -190,8 +197,11 @@ Stitcher.prototype.checkExchangeTrades = function(since, next) {
   }
 
   var watcher = new DataProvider(exchangeConfig);
-
   watcher.getTrades(since, function(e, d) {
+    if(e) {
+      util.die(e.message);
+    }
+
     if(_.isEmpty(d))
       return util.die(
         `Gekko tried to retrieve data since ${since.format('YYYY-MM-DD HH:mm:ss')}, however
@@ -213,6 +223,7 @@ Stitcher.prototype.seedLocalData = function(from, to, next) {
     });
 
     this.batcher.write(rows);
+    this.batcher.flush();
     this.reader.close();
     next();
 

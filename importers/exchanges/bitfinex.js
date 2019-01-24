@@ -4,14 +4,15 @@ const _ = require('lodash');
 const moment = require('moment');
 const log = require('../../core/log');
 
-var config = util.getConfig();
+const config = util.getConfig();
 
-var dirs = util.dirs();
+const dirs = util.dirs();
 
-var Fetcher = require(dirs.exchanges + 'bitfinex');
+const Fetcher = require(dirs.exchanges + 'bitfinex');
+const retry = require(dirs.exchanges + '../exchangeUtils').retry;
 
 Fetcher.prototype.getTrades = function(upto, callback, descending) {
-  let process = (err, data) => {
+  const handle = (err, data) => {
     if (err) return callback(err);
 
     var trades = [];
@@ -21,7 +22,7 @@ Fetcher.prototype.getTrades = function(upto, callback, descending) {
           tid: trade.ID,
           date: moment(trade.MTS).format('X'),
           price: +trade.PRICE,
-          amount: +trade.AMOUNT,
+          amount: +Math.abs(trade.AMOUNT),
         };
       });
     }
@@ -37,8 +38,8 @@ Fetcher.prototype.getTrades = function(upto, callback, descending) {
   }
 
   log.debug('Querying trades with: ' + path);
-  let handler = cb => this.bitfinex.makePublicRequest(path, this.handleResponse('getTrades', cb));
-  util.retryCustom(retryCritical, _.bind(handler, this), _.bind(process, this));
+  const fetch = cb => this.bitfinex.makePublicRequest(path, this.handleResponse('getTrades', cb));
+  retry(null, fetch, handle);
 };
 
 util.makeEventEmitter(Fetcher);
@@ -75,12 +76,16 @@ var fetch = () => {
   if (lastTimestamp) {
     // We need to slow this down to prevent hitting the rate limits
     setTimeout(() => {
-      fetcher.getTrades(lastTimestamp, handleFetch);
+
+      // make sure we fetch with overlap from last batch
+      const since = lastTimestamp - 1000;
+      fetcher.getTrades(since, handleFetch);
     }, 2500);
   } else {
     lastTimestamp = from.valueOf();
     batch_start = moment(from);
     batch_end = moment(from).add(stride, 'h');
+
     fetcher.getTrades(batch_end, handleFetch);
   }
 };

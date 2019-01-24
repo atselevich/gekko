@@ -1,7 +1,7 @@
-<template lang='jade'>
+<template lang='pug'>
   div
     h2.contain Backtest
-    .hr.contain
+    .hr
     config-builder(v-on:config='check')
     div(v-if='backtestable')
       .txt--center
@@ -40,18 +40,7 @@ export default {
     run: function() {
       this.backtestState = 'fetching';
 
-      const req = {
-        gekkoConfig: this.config,
-        data: {
-          candleProps: ['close', 'start'],
-          indicatorResults: true,
-          report: true,
-          roundtrips: true,
-          trades: true
-        }
-      }
-
-      post('backtest', req, (error, response) => {
+      post('backtest', this.config, (error, response) => {
         this.backtestState = 'fetched';
         this.backtestResult = response;
       });
@@ -64,11 +53,3 @@ export default {
   }
 }
 </script>
-
-<style>
-.contain {
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
-</style>

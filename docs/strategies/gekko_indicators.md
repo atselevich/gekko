@@ -28,15 +28,15 @@ If you want to use the MACD indicator from Gekko, you need to register it in you
 
 Here is a list of all supported indicators, click on them to read more about what they are and how to implement them in Gekko:
 
-- [EMA](#ema)
-- [PPO](#ppo)
-- [CCI](#cci)
-- [DEMA](#dema)
-- [LRC](#lrc)
-- [MACD](#macd)
-- [RSI](#rsi)
-- [SMA](#sma)
-- [TSI](#tsi)
+- [EMA](#EMA)
+- [PPO](#PPO)
+- [CCI](#CCI)
+- [DEMA](#DEMA)
+- [LRC](#LRC)
+- [MACD](#MACD)
+- [RSI](#RSI)
+- [SMA](#SMA)
+- [TSI](#TSI)
 - [UO](#UO)
 
 ### EMA
@@ -64,8 +64,8 @@ You can implement the EMA like so:
 
 
 ### PPO
-> **What is the 'Percentage Price Oscillator - PPO'** 
-> "The percentage price oscillator (PPO) is a technical momentum indicator showing the relationship between two moving averages." 
+> **What is the 'Percentage Price Oscillator - PPO'**
+> "The percentage price oscillator (PPO) is a technical momentum indicator showing the relationship between two moving averages."
 
 *[More info on investopedia](https://www.investopedia.com/terms/p/ppo.asp).*
 
@@ -120,4 +120,3 @@ You can implement the EMA like so:
 > "A technical indicator that uses the weighted average of three different time periods to reduce the volatility and false transaction signals that are associated with many other indicators that mainly rely on a single time period"
 
 *[More info on investopedia](https://www.investopedia.com/terms/u/ultimateoscillator.asp).*
-

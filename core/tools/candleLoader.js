@@ -78,10 +78,11 @@ const handleCandles = (err, data) => {
     util.die('Encountered an error..')
   }
 
-  if(_.size(data) && _.last(data).start >= toUnix)
+  if(_.size(data) && _.last(data).start >= toUnix || iterator.from.unix() >= toUnix)
     DONE = true;
 
   batcher.write(data);
+  batcher.flush();
 
   if(DONE) {
     reader.close();

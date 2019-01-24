@@ -6,16 +6,27 @@ const ENV = util.gekkoEnv();
 const config = util.getConfig();
 const calcConfig = config.paperTrader;
 const watchConfig = config.watch;
+const dirs = util.dirs();
+const log = require(dirs.core + 'log');
+
+const TrailingStop = require(dirs.broker + 'triggers/trailingStop');
 
 const PaperTrader = function() {
   _.bindAll(this);
 
-  this.fee = 1 - (calcConfig['fee' + calcConfig.feeUsing.charAt(0).toUpperCase() + calcConfig.feeUsing.slice(1)] + calcConfig.slippage) / 100;  
+  if(calcConfig.feeUsing === 'maker') {
+    this.rawFee = calcConfig.feeMaker;
+  } else {
+    this.rawFee = calcConfig.feeTaker;
+  }
+
   this.keepCurrency = 0.50;
 
   if(_.isNumber(calcConfig.keepCurrency)) {    
     this.keepCurrency = calcConfig.keepCurrency;
  }
+
+  this.fee = 1 - this.rawFee / 100;
   
   this.currency = watchConfig.currency;
   this.asset = watchConfig.asset;
@@ -23,37 +34,33 @@ const PaperTrader = function() {
   this.portfolio = {
     asset: calcConfig.simulationBalance.asset,
     currency: calcConfig.simulationBalance.currency,
-    balance: false
   }
+
+  this.balance = false;
+
+  if(this.portfolio.asset > 0) {
+    this.exposed = true;
+  }
+
+  this.propogatedTrades = 0;
+  this.propogatedTriggers = 0;
+
+  this.warmupCompleted = false;
+
+  this.warmupCandle;
 }
 
-// teach our paper trader events
-util.makeEventEmitter(PaperTrader);
-
-PaperTrader.prototype.relayTrade = function(advice) {
-  var what = advice.recommendation;
-  var price = advice.candle.close;
-  var at = advice.candle.start;
-
-  let action;
-  if(what === 'short')
-    action = 'sell';
-  else if(what === 'long')
-    action = 'buy';
-  else
-    return;
-
-  this.emit('trade', {
-    action,
-    price,
-    portfolio: _.clone(this.portfolio),
-    balance: this.portfolio.currency + this.price * this.portfolio.asset,
-    date: at
+PaperTrader.prototype.relayPortfolioChange = function() {
+  this.deferredEmit('portfolioChange', {
+    asset: this.portfolio.asset,
+    currency: this.portfolio.currency
   });
 }
 
-PaperTrader.prototype.relayPortfolio = function() {
-  this.emit('portfolioUpdate', _.clone(this.portfolio));
+PaperTrader.prototype.relayPortfolioValueChange = function() {
+  this.deferredEmit('portfolioValueChange', {
+    balance: this.getBalance()
+  });
 }
 
 PaperTrader.prototype.extractFee = function(amount) {
@@ -65,49 +72,218 @@ PaperTrader.prototype.extractFee = function(amount) {
 }
 
 PaperTrader.prototype.setStartBalance = function() {
-  this.portfolio.balance = this.portfolio.currency + this.price * this.portfolio.asset;
-  this.relayPortfolio();
+  this.balance = this.getBalance();
 }
 
 // after every succesfull trend ride we hopefully end up
 // with more BTC than we started with, this function
 // calculates Gekko's profit in %.
-PaperTrader.prototype.updatePosition = function(advice) {
-  let what = advice.recommendation;
-  let price = advice.candle.close;
+PaperTrader.prototype.updatePosition = function(what) {
+
+  let cost;
+  let amount;
 
   var amount = (this.portfolio.currency * (1 - this.keepCurrency)) / price;
     
   // virtually trade all {currency} to {asset}
   // at the current price (minus fees)
   if(what === 'long') {
-    this.portfolio.asset += this.extractFee(amount);
+    cost = (1 - this.fee) * this.portfolio.currency;
+    this.portfolio.asset += this.extractFee(this.portfolio.currency / this.price);
+    amount = this.portfolio.asset;
     this.portfolio.currency = this.portfolio.currency - (amount * price);
+
+    this.exposed = true;
     this.trades++;
   }
 
   // virtually trade all {currency} to {asset}
   // at the current price (minus fees)
   else if(what === 'short') {
-    this.portfolio.currency += this.extractFee(this.portfolio.asset * price);
+    cost = (1 - this.fee) * (this.portfolio.asset * this.price);
+    this.portfolio.currency += this.extractFee(this.portfolio.asset * this.price);
+    amount = this.portfolio.currency / this.price;
     this.portfolio.asset = 0;
+
+    this.exposed = false;
     this.trades++;
   }
+
+  const effectivePrice = this.price * this.fee;
+
+  return { cost, amount, effectivePrice };
+}
+
+PaperTrader.prototype.getBalance = function() {
+  return this.portfolio.currency + this.price * this.portfolio.asset;
+}
+
+PaperTrader.prototype.now = function() {
+  return this.candle.start.clone().add(1, 'minute');
 }
 
 PaperTrader.prototype.processAdvice = function(advice) {
-  if(advice.recommendation === 'soft')
-    return;
+  let action;
+  if(advice.recommendation === 'short') {
+    action = 'sell';
 
-  this.updatePosition(advice);
-  this.relayTrade(advice);
+    // clean up potential old stop trigger
+    if(this.activeStopTrigger) {
+      this.deferredEmit('triggerAborted', {
+        id: this.activeStopTrigger.id,
+        date: advice.date
+      });
+
+      delete this.activeStopTrigger;
+    }
+
+  } else if(advice.recommendation === 'long') {
+    action = 'buy';
+
+    if(advice.trigger) {
+
+      // clean up potential old stop trigger
+      if(this.activeStopTrigger) {
+        this.deferredEmit('triggerAborted', {
+          id: this.activeStopTrigger.id,
+          date: advice.date
+        });
+
+        delete this.activeStopTrigger;
+      }
+
+      this.createTrigger(advice);
+    }
+  } else {
+    return log.warn(
+      `[Papertrader] ignoring unknown advice recommendation: ${advice.recommendation}`
+    );
+  }
+
+  this.tradeId = 'trade-' + (++this.propogatedTrades);
+
+  this.deferredEmit('tradeInitiated', {
+    id: this.tradeId,
+    adviceId: advice.id,
+    action,
+    portfolio: _.clone(this.portfolio),
+    balance: this.getBalance(),
+    date: advice.date,
+  });
+
+  const { cost, amount, effectivePrice } = this.updatePosition(advice.recommendation);
+
+  this.relayPortfolioChange();
+  this.relayPortfolioValueChange();
+
+  this.deferredEmit('tradeCompleted', {
+    id: this.tradeId,
+    adviceId: advice.id,
+    action,
+    cost,
+    amount,
+    price: this.price,
+    portfolio: this.portfolio,
+    balance: this.getBalance(),
+    date: advice.date,
+    effectivePrice,
+    feePercent: this.rawFee
+  });
+}
+
+PaperTrader.prototype.createTrigger = function(advice) {
+  const trigger = advice.trigger;
+
+  if(trigger && trigger.type === 'trailingStop') {
+
+    if(!trigger.trailValue) {
+      return log.warn(`[Papertrader] ignoring trailing stop without trail value`);
+    }
+
+    const triggerId = 'trigger-' + (++this.propogatedTriggers);
+
+    this.deferredEmit('triggerCreated', {
+      id: triggerId,
+      at: advice.date,
+      type: 'trailingStop',
+      proprties: {
+        trail: trigger.trailValue,
+        initialPrice: this.price,
+      }
+    });
+
+    this.activeStopTrigger = {
+      id: triggerId,
+      adviceId: advice.id,
+      instance: new TrailingStop({
+        initialPrice: this.price,
+        trail: trigger.trailValue,
+        onTrigger: this.onStopTrigger
+      })
+    }
+  } else {
+    log.warn(`[Papertrader] Gekko does not know trigger with type "${trigger.type}".. Ignoring stop.`);
+  }
+}
+
+PaperTrader.prototype.onStopTrigger = function() {
+
+  const date = this.now();
+
+  this.deferredEmit('triggerFired', {
+    id: this.activeStopTrigger.id,
+    date
+  });
+
+  const { cost, amount, effectivePrice } = this.updatePosition('short');
+
+  this.relayPortfolioChange();
+  this.relayPortfolioValueChange();
+
+  this.deferredEmit('tradeCompleted', {
+    id: this.tradeId,
+    adviceId: this.activeStopTrigger.adviceId,
+    action: 'sell',
+    cost,
+    amount,
+    price: this.price,
+    portfolio: this.portfolio,
+    balance: this.getBalance(),
+    date,
+    effectivePrice,
+    feePercent: this.rawFee
+  });
+
+  delete this.activeStopTrigger;
+}
+
+PaperTrader.prototype.processStratWarmupCompleted = function() {
+  this.warmupCompleted = true;
+  this.processCandle(this.warmupCandle, _.noop);
 }
 
 PaperTrader.prototype.processCandle = function(candle, done) {
-  this.price = candle.close;
+  if(!this.warmupCompleted) {
+    this.warmupCandle = candle;
+    return done();
+  }
 
-  if(!this.portfolio.balance)
+  this.price = candle.close;
+  this.candle = candle;
+
+  if(!this.balance) {
     this.setStartBalance();
+    this.relayPortfolioChange();
+    this.relayPortfolioValueChange();
+  }
+
+  if(this.exposed) {
+    this.relayPortfolioValueChange();
+  }
+
+  if(this.activeStopTrigger) {
+    this.activeStopTrigger.instance.updatePrice(this.price);
+  }
 
   done();
 }
